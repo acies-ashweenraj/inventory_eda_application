@@ -10,8 +10,16 @@ if uploaded_file is not None:
 
     if df1 is not None:
         st.subheader("DataFrame 1")
-        st.dataframe(df1)
+        st.dataframe(df1.head())
 
     if df2 is not None:
         st.subheader("DataFrame 2")
-        st.dataframe(df2)
+        st.dataframe(df2.head())
+    
+    # Order stats
+    order_summary = df1.groupby('SKU ID')['Order Quantity'].agg(['sum', 'mean', 'std', 'count']).reset_index()
+    order_summary.columns = ['SKU ID', 'Total Orders', 'Avg Order Qty', 'STD Order Qty', 'Order Count']
+
+    # Merge with stock
+    merged_df = df2.merge(order_summary, on='SKU ID', how='left').fillna(0)
+    merged_df.columns

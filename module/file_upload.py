@@ -8,10 +8,10 @@ def read_uploaded_file(uploaded_file):
 
     try:
         if file_type == 'csv':
-            df1 = pd.read_csv(uploaded_file)
-            df2 = None
+            order_df = pd.read_csv(uploaded_file)
+            stock_df = None
             st.success("CSV file successfully loaded.")
-            return df1, df2, file_type
+            return order_df, stock_df, file_type
 
         elif file_type in ['xls', 'xlsx']:
             xls = pd.ExcelFile(uploaded_file)
@@ -21,11 +21,17 @@ def read_uploaded_file(uploaded_file):
                 st.warning(f"Only {len(sheet_names)} sheet(s) found. Please upload a file with at least 2 sheets.")
                 return None, None, file_type
 
-            df1 = pd.read_excel(xls, sheet_name=sheet_names[0])
-            df2 = pd.read_excel(xls, sheet_name=sheet_names[1])
+            order_df = pd.read_excel(xls, sheet_name=sheet_names[0])
+            stock_df = pd.read_excel(xls, sheet_name=sheet_names[1])
 
+            order_df['Order Date'] = pd.to_datetime(order_df['Order Date'], dayfirst=True)
+
+            # Standardize column names
+            order_df.columns = order_df.columns.str.strip()
+            stock_df.columns = stock_df.columns.str.strip()
+            
             st.success("Excel file successfully loaded.")
-            return df1, df2, file_type
+            return order_df, stock_df, file_type
 
         else:
             st.error("Unsupported file type.")
