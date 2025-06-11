@@ -22,4 +22,5 @@ if uploaded_file is not None:
 
     # Merge with stock
     merged_df = df2.merge(order_summary, on='SKU ID', how='left').fillna(0)
-    merged_df.columns
+    st.session_state['merged_df'] = merged_df
+

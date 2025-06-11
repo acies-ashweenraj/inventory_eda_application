@@ -1,25 +1,34 @@
-# pages/2_ABC_XYZ_Analysis.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-# You should receive df1 from session state or directly in this page
-if 'df1' not in st.session_state:
-    st.warning("Please upload file first in Dashboard 1.")
+st.title("Dashboard 2 - ABC-XYZ Analysis")
+
+# Check if merged_df is available (assuming you're storing merged_df in session state from Dashboard 1)
+if 'merged_df' not in st.session_state:
+    st.warning("Please upload and process file in Dashboard 1 first.")
     st.stop()
 
-df = st.session_state['df1'].copy()
+merged_df = st.session_state['merged_df'].copy()
 
-st.title("ABC-XYZ Inventory Classification")
+st.subheader("Merged Data")
+st.dataframe(merged_df.head())
 
-# -- ABC Classification --
+# Validate required columns
+required_cols = ['SKU ID', 'Total Orders', 'Avg Order Qty', 'STD Order Qty', 'Unit Price']
+missing_cols = [col for col in required_cols if col not in merged_df.columns]
 
-# Calculate Consumption Value
-df['Consumption Value'] = df['Total Orders'] * df['Unit Price']
-df = df.sort_values('Consumption Value', ascending=False)
-df['Cumulative %'] = 100 * df['Consumption Value'].cumsum() / df['Consumption Value'].sum()
+if missing_cols:
+    st.error(f"Missing required columns: {missing_cols}")
+    st.stop()
+
+# ---------------------------------------------------
+# Step 1 — ABC Classification (based on consumption value)
+# ---------------------------------------------------
+merged_df['Consumption Value'] = merged_df['Total Orders'] * merged_df['Unit Price']
+merged_df = merged_df.sort_values('Consumption Value', ascending=False)
+merged_df['Cumulative %'] = 100 * merged_df['Consumption Value'].cumsum() / merged_df['Consumption Value'].sum()
 
 def classify_abc(cum_pct):
     if cum_pct <= 70:
@@ -29,11 +38,12 @@ def classify_abc(cum_pct):
     else:
         return 'C'
 
-df['ABC Class'] = df['Cumulative %'].apply(classify_abc)
+merged_df['ABC Class'] = merged_df['Cumulative %'].apply(classify_abc)
 
-# -- XYZ Classification --
-
-df['CV'] = df['STD Order Qty'] / (df['Avg Order Qty'] + 1e-9)
+# ---------------------------------------------------
+# Step 2 — XYZ Classification (based on coefficient of variation)
+# ---------------------------------------------------
+merged_df['CV'] = merged_df['STD Order Qty'] / (merged_df['Avg Order Qty'] + 1e-9)
 
 def classify_xyz(cv):
     if cv <= 0.5:
@@ -43,17 +53,28 @@ def classify_xyz(cv):
     else:
         return 'Z'
 
-df['XYZ Class'] = df['CV'].apply(classify_xyz)
-df['ABC-XYZ Class'] = df['ABC Class'] + "-" + df['XYZ Class']
+merged_df['XYZ Class'] = merged_df['CV'].apply(classify_xyz)
 
+# ---------------------------------------------------
+# Step 3 — Combine ABC & XYZ
+# ---------------------------------------------------
+merged_df['ABC-XYZ Class'] = merged_df['ABC Class'] + "-" + merged_df['XYZ Class']
+
+# ---------------------------------------------------
+# Step 4 — Show ABC-XYZ classified data
+# ---------------------------------------------------
 st.subheader("ABC-XYZ Classified Data")
-st.dataframe(df[['SKU ID', 'ABC Class', 'XYZ Class', 'ABC-XYZ Class', 'Total Orders', 'Order Count', 'STD Order Qty']])
+st.dataframe(merged_df[['SKU ID', 'ABC Class', 'XYZ Class', 'ABC-XYZ Class', 
+                        'Total Orders', 'Avg Order Qty', 'STD Order Qty', 
+                        'Order Count', 'Unit Price']])
 
-# -- Heatmap --
+# ---------------------------------------------------
+# Step 5 — ABC-XYZ Heatmap
+# ---------------------------------------------------
+st.subheader("ABC-XYZ Heatmap")
 
-abc_xyz_df = df[['SKU ID', 'ABC Class', 'XYZ Class']].copy()
-heatmap_data = abc_xyz_df.groupby(['ABC Class', 'XYZ Class']).size().reset_index(name='Count')
-pivot_df = heatmap_data.pivot(index='XYZ Class', columns='ABC Class', values='Count').fillna(0)
+abc_xyz_df = merged_df.groupby(['ABC Class', 'XYZ Class']).size().reset_index(name='Count')
+pivot_df = abc_xyz_df.pivot(index='XYZ Class', columns='ABC Class', values='Count').fillna(0)
 
 fig = go.Figure(data=go.Heatmap(
     z=pivot_df.values,
@@ -64,6 +85,7 @@ fig = go.Figure(data=go.Heatmap(
     showscale=True
 ))
 
+# Add annotation text
 annotations = []
 for i, y_val in enumerate(pivot_df.index):
     for j, x_val in enumerate(pivot_df.columns):
@@ -73,10 +95,7 @@ for i, y_val in enumerate(pivot_df.index):
                 y=y_val,
                 text=str(int(pivot_df.iloc[i, j])),
                 showarrow=False,
-                font=dict(
-                    color='white' if pivot_df.iloc[i, j] > pivot_df.values.max()/2 else 'black',
-                    size=16
-                )
+                font=dict(color='white' if pivot_df.iloc[i, j] > pivot_df.values.max()/2 else 'black', size=14)
             )
         )
 
@@ -85,10 +104,7 @@ fig.update_layout(
     xaxis_title='ABC Class',
     yaxis_title='XYZ Class',
     annotations=annotations,
-    xaxis=dict(tickmode='array', tickvals=pivot_df.columns, ticktext=pivot_df.columns),
-    yaxis=dict(tickmode='array', tickvals=pivot_df.index, ticktext=pivot_df.index),
-    font=dict(size=16)
+    font=dict(size=14)
 )
 
-st.subheader("ABC-XYZ Heatmap")
 st.plotly_chart(fig, use_container_width=True)
